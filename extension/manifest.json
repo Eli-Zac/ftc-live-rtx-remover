@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "FTC Live RTX Logo Remover",
+  "version": "1.0.0",
+  "description": "Removes the 'Presented by RTX' mark from FIRST Tech Challenge Live pages on any server or IP.",
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}
