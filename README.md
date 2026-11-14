@@ -34,6 +34,8 @@ Paste this into a browser source's **Custom CSS** box, below the existing line:
 
 ```css
 img[src*="_primary_word"]{aspect-ratio:373/72 !important;object-fit:cover !important;object-position:top !important}
+img[src*="_primary_wide"]{aspect-ratio:383/69.2 !important;object-fit:cover !important;object-position:left !important}
+img[src*="_season_primary_color"],img[src*="/ftc/2027/color"]{aspect-ratio:414/234 !important;object-fit:cover !important;object-position:top !important}
 img[src*="/ftc/2025/color"]{aspect-ratio:649/593 !important;object-fit:cover !important;object-position:top !important}
 img[src*="/ftc/2026/color"]{aspect-ratio:234/315 !important;object-fit:cover !important;object-position:top !important}
 ```
