@@ -1,14 +1,20 @@
 // FTC Live RTX Logo Remover
 // The RTX mark is baked into the season logo SVGs as a "PRESENTED BY <sponsor>"
-// strip along the bottom. This crops that strip off by rewriting the SVG viewBox.
+// strip along the bottom (or, on the wide logos, a block on the right). This crops
+// that strip off by rewriting the SVG viewBox.
 (() => {
   'use strict';
 
   // Logos that carry a presenting-sponsor strip (hashed names, e.g.
-  // /img/logos/biobuzz_season_primary_word-<hash>.svg, /img/logos/ftc/2026/color-<hash>.svg)
-  const TARGET = /\/img\/logos\/(?:[^/]*_primary_word[^/]*|ftc\/\d{4}\/color[^/]*)\.svg$/i;
+  // /img/logos/biobuzz_season_primary_word-<hash>.svg, /img/logos/ftc/2026/color-<hash>.svg,
+  // /img/logos/biobuzz_season_primary_wide-<hash>.svg)
+  const TARGET = /\/img\/logos\/(?:[^/]*_primary_(?:word|wide|color)[^/]*|ftc\/\d{4}\/color[^/]*)\.svg$/i;
+  // Wide logos put the sponsor block to the right of the wordmark instead of below it.
+  const SIDE_STRIP = /_primary_wide[^/]*\.svg$/i;
   const CSS_HIDE =
     'img[src*="/img/logos/"][src*="_primary_word"]:not([data-rtx-clean]),' +
+    'img[src*="/img/logos/"][src*="_primary_wide"]:not([data-rtx-clean]),' +
+    'img[src*="/img/logos/"][src*="_primary_color"]:not([data-rtx-clean]),' +
     'img[src*="/img/logos/ftc/"][src*="/color"]:not([data-rtx-clean])' +
     '{visibility:hidden !important}';
 
@@ -26,9 +32,10 @@
       /FIRST Tech Challenge Live/i.test(document.title);
   }
 
-  // Render the SVG, find horizontal bands of content, and return the y (in viewBox
+  // Render the SVG, find bands of content along one axis (rows for a strip along the
+  // bottom, columns for a block on the right), and return the y or x (in viewBox
   // units) to cut at if the last band looks like a sponsor strip. Otherwise null.
-  async function findSponsorCut(svgText, vb) {
+  async function findSponsorCut(svgText, vb, side) {
     const W = 600;
     const H = Math.max(1, Math.round(W * vb[3] / vb[2]));
     const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }));
@@ -42,28 +49,33 @@
       ctx.drawImage(img, 0, 0, W, H);
       const d = ctx.getImageData(0, 0, W, H).data;
 
-      const filled = (y) => {
-        for (let x = 0, i = y * W * 4 + 3; x < W; x++, i += 4) if (d[i] > 16) return true;
-        return false;
-      };
+      const rows = side !== 'right';
+      const N = rows ? H : W;       // lines along the cut axis
+      const filled = rows
+        ? (y) => { for (let x = 0, i = y * W * 4 + 3; x < W; x++, i += 4) if (d[i] > 16) return true; return false; }
+        : (x) => { for (let y = 0, i = x * 4 + 3; y < H; y++, i += W * 4) if (d[i] > 16) return true; return false; };
       const bands = [];
       let start = -1;
-      for (let y = 0; y < H; y++) {
-        const f = filled(y);
-        if (f && start < 0) start = y;
-        if (!f && start >= 0) { bands.push([start, y]); start = -1; }
+      for (let n = 0; n < N; n++) {
+        const f = filled(n);
+        if (f && start < 0) start = n;
+        if (!f && start >= 0) { bands.push([start, n]); start = -1; }
       }
-      if (start >= 0) bands.push([start, H]);
-      if (bands.length < 2) return null;
+      if (start >= 0) bands.push([start, N]);
+      // The sponsor mark can itself be split into pieces (e.g. RTX icon + "RTX" text a
+      // pixel apart), so treat trailing bands that nearly touch as one block.
+      let k = bands.length - 1;
+      while (k > 0 && bands[k][0] - bands[k - 1][1] < N * 0.01) k--;
+      if (k < 1) return null;
 
-      const last = bands[bands.length - 1];
-      const prev = bands[bands.length - 2];
+      const last = [bands[k][0], bands[bands.length - 1][1]];
+      const prev = bands[k - 1];
       const gap = last[0] - prev[1];
-      if (last[1] - last[0] > H * 0.35) return null; // too tall to be a sponsor strip
-      if (gap < H * 0.01) return null;               // not clearly separated
+      if (last[1] - last[0] > N * 0.35) return null; // too big to be a sponsor strip
+      if (gap < N * 0.01) return null;               // not clearly separated
 
-      const cutPx = prev[1] + Math.min(gap / 2, H * 0.02);
-      return vb[1] + cutPx * vb[3] / H;
+      const cutPx = prev[1] + Math.min(gap / 2, N * 0.02);
+      return rows ? vb[1] + cutPx * vb[3] / H : vb[0] + cutPx * vb[2] / W;
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -83,16 +95,21 @@
         if (vb.some(isNaN)) return url;
       }
 
-      const cutY = await findSponsorCut(text, vb);
-      if (cutY == null) return url;
+      const side = SIDE_STRIP.test(new URL(url).pathname) ? 'right' : 'bottom';
+      const cut = await findSponsorCut(text, vb, side);
+      if (cut == null) return url;
 
-      const newH = cutY - vb[1];
-      const ratio = newH / vb[3];
-      svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${newH}`);
-      const h = svg.getAttribute('height');
-      if (h && !isNaN(parseFloat(h))) {
-        const unit = (h.match(/[a-z%]+$/i) || [''])[0];
-        if (unit !== '%') svg.setAttribute('height', parseFloat(h) * ratio + unit);
+      const rows = side === 'bottom';
+      const size = rows ? cut - vb[1] : cut - vb[0];
+      const ratio = size / (rows ? vb[3] : vb[2]);
+      svg.setAttribute('viewBox', rows
+        ? `${vb[0]} ${vb[1]} ${vb[2]} ${size}`
+        : `${vb[0]} ${vb[1]} ${size} ${vb[3]}`);
+      const attr = rows ? 'height' : 'width';
+      const v = svg.getAttribute(attr);
+      if (v && !isNaN(parseFloat(v))) {
+        const unit = (v.match(/[a-z%]+$/i) || [''])[0];
+        if (unit !== '%') svg.setAttribute(attr, parseFloat(v) * ratio + unit);
       }
       const out = new XMLSerializer().serializeToString(svg);
       return URL.createObjectURL(new Blob([out], { type: 'image/svg+xml' }));

@@ -2,7 +2,7 @@
 
 Removes the "Presented by RTX" mark from FIRST Tech Challenge Live (FTC Scoring) pages, on any server IP.
 
-The RTX mark isn't a separate element on the page. It's baked into the season logo SVGs as a strip along the bottom, so both tools here crop that strip off and leave the rest of the logo intact.
+The RTX mark isn't a separate element on the page. It's baked into the season logo SVGs as a strip along the bottom (or, on the wide logos, a block on the right), so both tools here crop that strip off and leave the rest of the logo intact.
 
 Two versions:
 
@@ -45,6 +45,7 @@ img[src*="/ftc/2026/color"]{aspect-ratio:234/315 !important;object-fit:cover !im
 - **Result videos.** The red/blue/tie win animations are video files and aren't changed.
 - **Event sponsors.** Logos uploaded in FTC Live's event sponsor settings are shown as normal sponsor images and aren't touched.
 - **OBS only: future artwork.** The OBS crop sizes are fixed for the current logos. If an FTC Live update changes the artwork, they may need updating. The Chrome extension adapts on its own.
+- **Extension only: BioBuzz full-colour logo.** On `ftc/2027/color` the RTX bar is joined to the rest of the artwork with no transparent gap, so the extension can't detect it and leaves that logo as it is. The display pages don't use it; the OBS CSS crops it with a fixed size.
 - **OBS only: new sources.** A newly added browser source can show the logo for up to a second before the script patches it.
 
 Tested against FTC Live v8.0.3.
